@@ -10,7 +10,8 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 
-#### FUNCTIONS 1.0
+#### FUNCTIONS 1.2
+import requests
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -38,19 +39,19 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = urllib2.urlopen(url)
+        r = requests.get(url)
         count = 1
-        while r.getcode() == 500 and count < 4:
+        while r.status_code == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = urllib2.urlopen(url)
+            r = requests.get(url)
         sourceFilename = r.headers.get('Content-Disposition')
 
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.getcode() == 200
+        validURL = r.status_code == 200
         validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx']
         return validURL, validFiletype
     except:
@@ -85,8 +86,8 @@ def convert_mth_strings ( mth_string ):
 
 #### VARIABLES 1.0
 
-entity_id = "E2632_BDC_gov"
-url = "https://www.broadland.gov.uk/info/200197/spending_and_transparency/339/council_spending_over_250"
+entity_id = "E2334_CBC_gov"
+url = "http://chorley.gov.uk/Pages/AtoZ/Council%20spending.aspx"
 errors = 0
 data = []
 
@@ -98,27 +99,18 @@ soup = BeautifulSoup(html, 'lxml')
 
 #### SCRAPE DATA
 
-links = soup.find('div', 'editor').find_all('a', href=True)
+links = soup.find('a', text="Council Spending and Payments to Suppliers").find_next('div').find_all('a', href=True)
 for link in links:
-    if 'http' not in link['href']:
-        year_url = 'https://www.broadland.gov.uk' + link['href']
-    else:
-        year_url = link['href']
-    year_html = urllib2.urlopen(year_url)
-    year_soup = BeautifulSoup(year_html, 'lxml')
-    blocks = year_soup.find_all('span', 'download-listing__file-tag download-listing__file-tag--type')
-    for block in blocks:
-        if 'CSV' in block.text:
-            url = block.find_next('a')['href']
-            if 'http' not in url:
-                url = 'https://www.broadland.gov.uk' + url
-            else:
-                url = url
-            file_name = block.find_next('a')['aria-label']
-            csvMth = file_name.split()[-2][:3]
-            csvYr = file_name.split()[-1]
-            csvMth = convert_mth_strings(csvMth.upper())
-            data.append([csvYr, csvMth, url])
+    if '.csv' in link['href']:
+        if 'http' not in link['href']:
+            url = 'http://chorley.gov.uk'+link['href']
+        else:
+            url = link['href']
+        file_name = link.text.encode('ascii', 'replace').replace('?', '')
+        csvMth = file_name[:3]
+        csvYr = file_name.split('.')[0][-4:]
+        csvMth = convert_mth_strings(csvMth.upper())
+        data.append([csvYr, csvMth, url])
 
 
 #### STORE DATA 1.0
